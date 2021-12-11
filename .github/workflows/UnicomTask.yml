@@ -1,0 +1,67 @@
+name: UnicomTask
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: '33 8,20 * * *'
+
+jobs:
+  deploy:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: main
+        fetch-depth: 0
+        lfs: true
+    - name: Set git identity
+      run : |
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+    - name: Load upstream commits
+      run: |
+        git config pull.rebase false 
+        git pull https://github.com/wuye999/myScripts --log --no-commit
+    - name: Apply commit changes
+      run: |
+        if [ -f ./.git/MERGE_MSG ]; then
+        mkdir ./tmp && cp ./.git/MERGE_MSG ./tmp/message
+        sed -i "1c [bot] AutoMerging: merge all upstream's changes:" ./tmp/message
+        sed -i '/^\#.*/d' ./tmp/message
+        git commit --file="./tmp/message"
+        else
+        echo "There is no merge commits."
+        fi
+    - name: Push Commits
+      env:
+        DOWNSTREAM_BRANCH: main
+        TZ: Asia/Shanghai
+      uses: ad-m/github-push-action@v0.6.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN  }}
+        branch: ${{ github.ref }}
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+    - uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/run_in_Actions/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    - name: Set time zone
+      run: sudo timedatectl set-timezone 'Asia/Shanghai'
+    - name: Install dependencies
+      run: |
+        cd unicom-task/
+        pip install -r requirements.txt
+    - name: Run
+      env:
+        unicom_config_1: ${{ secrets.UNICOM_CONFIG_1 }}
+      run: |
+        cd unicom-task/
+        python unicom_index.py
